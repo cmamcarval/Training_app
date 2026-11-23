@@ -1,1 +1,30 @@
-const CACHE='crux-cycle-v2',ROOT=new URL('./',self.location.href).pathname;self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll([ROOT,ROOT+'manifest.webmanifest',ROOT+'icon.svg']))));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));self.addEventListener('fetch',e=>{if(e.request.method!=='GET')return;e.respondWith(fetch(e.request).then(r=>{const x=r.clone();caches.open(CACHE).then(c=>c.put(e.request,x));return r}).catch(()=>caches.match(e.request).then(r=>r||caches.match(ROOT))))});
+const CACHE='crux-cycle-v3';
+const ROOT=new URL('./',self.location.href).pathname;
+const SHELL=[ROOT,`${ROOT}manifest.webmanifest`,`${ROOT}icon.svg`];
+
+self.addEventListener('install',event=>{
+ event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
+});
+
+self.addEventListener('activate',event=>{
+ event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()));
+});
+
+self.addEventListener('fetch',event=>{
+ const request=event.request;
+ const url=new URL(request.url);
+ if(request.method!=='GET'||url.origin!==self.location.origin)return;
+
+ if(request.mode==='navigate'){
+  event.respondWith(fetch(request).then(response=>{
+   if(response.ok)caches.open(CACHE).then(cache=>cache.put(ROOT,response.clone()));
+   return response;
+  }).catch(async()=>await caches.match(request)||await caches.match(ROOT)||Response.error()));
+  return;
+ }
+
+ event.respondWith(caches.match(request).then(cached=>cached||fetch(request).then(response=>{
+  if(response.ok)caches.open(CACHE).then(cache=>cache.put(request,response.clone()));
+  return response;
+ })));
+});

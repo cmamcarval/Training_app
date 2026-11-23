@@ -40,18 +40,35 @@ function activityBlock(text:string,index=0):Block{
  if(lower.startsWith('push ')&&!lower.includes('effort'))detail+=' Choose a variation or load that leaves 2–3 clean repetitions possible at the end of every set.';
  if(lower.includes('moderate bouldering'))detail+=' Choose problems you can normally complete within 1–3 attempts; stop before fatigue changes your movement.';
  if(lower.includes('limit problem')||lower.includes('coordination')||lower.includes('unfamiliar boulder')||lower.includes('competition-style'))detail+=' End the block if movement speed, accuracy, or landing control clearly drops.';
+ if(lower.includes('landing-control'))detail='Spend 5–10 min practising quiet, balanced landings from comfortable heights. Increase height only while control stays consistent.';
  if(lower==='mobility.')detail='Spend 8–12 min on easy shoulder, forearm, wrist and hip mobility. Use comfortable ranges; do not force painful positions.';
  return{name,detail};
+}
+function appendQualifier(blocks:Block[],part:string){
+ if(blocks.length===0)return false;
+ const clean=plain(part.trim().replace(/\.$/,''));
+ const lower=clean.toLowerCase();
+ let sentence='';
+ if(/^\d+(?:[–-]\d+)? min rest/.test(lower))sentence=`Take ${clean.toLowerCase()} between attempts.`;
+ else if(lower==='stop if output drops')sentence='Stop the block as soon as output or movement quality drops.';
+ else if(lower==='quality over attempts')sentence='Prioritize movement quality; do not add attempts to chase completion.';
+ else if(lower==='note late-round drop-off')sentence='Record any decline in accuracy or power late in the round.';
+ if(!sentence)return false;
+ blocks[blocks.length-1].detail+=` ${sentence}`;
+ return true;
 }
 function fingerSession(text:string,guardrail:string):Block[]{
  const parts=text.split(';').map(x=>x.trim()).filter(Boolean),first=parts.shift()||'';
  if(/^No fingerboard/i.test(first))return[{name:'Taper recovery',detail:'Do not do finger loading today. Either rest completely or do 20–40 min of very easy movement that leaves you feeling fresher.'}];
  if(!/^F[012]/.test(first))return[first,...parts].map(activityBlock);
- return[fingerWarmup,fingerBlock(first,guardrail),...parts.map(activityBlock)];
+ const activities:Block[]=[];
+ for(const part of parts)if(!appendQualifier(activities,part))activities.push(activityBlock(part,activities.length));
+ return[fingerWarmup,fingerBlock(first,guardrail),...activities];
 }
 function developmentBlocks(text:string):Block[]{
  const parts=text.split(';').map(x=>x.trim()).filter(Boolean),blocks:Block[]=[];
  for(const part of parts){
+  if(appendQualifier(blocks,part))continue;
   const c1=part.match(/^C1\s+(\d+) rounds?/i); if(c1){blocks.push({name:`General strength circuit · ${c1[1]} rounds`,detail:'Each round: split squat 8–10 per side; push-ups 8–12; row 10–12; Romanian deadlift 8–10; Pallof press 10 per side; band external rotation 12–15. Rest 30–60 sec between exercises and 2 min between rounds.',meta:'Finish every set with 2–4 clean repetitions still possible.'});continue}
   if(/^C2/i.test(part)){blocks.push({name:'Strength maintenance · 2 rounds',detail:'Only if fresh: push 8–10; row 8–10; single-leg squat 8 per side; Pallof press or other anti-rotation exercise 10 per side. Rest as needed and finish in 15–25 min.',meta:'Effort 6–7/10. Skip this block if climbing quality or recovery is down.'});continue}
   blocks.push(activityBlock(part,blocks.length));

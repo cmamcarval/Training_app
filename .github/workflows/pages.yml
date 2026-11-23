@@ -20,7 +20,8 @@ jobs:
           node-version: 24.12
           cache: npm
       - run: npm ci
-      - run: npm run build:pages
+      - run: npm run typecheck
+      - run: npm test
       - uses: actions/upload-pages-artifact@v4
         with:
           path: dist-pages
