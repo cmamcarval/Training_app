@@ -22,7 +22,7 @@ const shortDay=(d:string)=>({MON:"Mon",TUE:"Tue",WED:"Wed",THU:"Thu",FRI:"Fri",W
 
 export default function Home(){
  const [tab,setTab]=useState<Tab>("today"), [weekNo,setWeekNo]=useState(currentWeek()), [data,setData]=useState<AppData>(EMPTY), [ready,setReady]=useState(false), [selected,setSelected]=useState<{week:PlanWeek;day:string}|null>(null), [logOpen,setLogOpen]=useState(false); const importRef=useRef<HTMLInputElement>(null);
- useEffect(()=>{loadData().then(d=>{setData(d);setReady(true)});navigator.serviceWorker?.register("/sw.js").catch(()=>{});},[]);
+ useEffect(()=>{loadData().then(d=>{setData(d);setReady(true)});const base=location.pathname.startsWith('/Training_app')?'/Training_app/':'/';navigator.serviceWorker?.register(`${base}sw.js`).catch(()=>{});},[]);
  useEffect(()=>{if(ready)saveData(data)},[data,ready]);
  const week=PLAN.weeks[weekNo-1]; const key=dayKey(); const day=week.sessions.find(s=>s.day===key) || (key==="SAT"||key==="SUN"?week.sessions.find(s=>s.day==="WEEKEND"):week.sessions[0]);
  const done=new Map(data.actuals.filter(a=>a.plannedId).map(a=>[a.plannedId,a]));
