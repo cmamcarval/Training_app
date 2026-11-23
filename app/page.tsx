@@ -1,7 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { PLAN, type PlanWeek } from "../lib/plan";
+import {getFirebase} from "../lib/firebase";
+import {createUserWithEmailAndPassword,getIdToken,onAuthStateChanged,reload,sendEmailVerification,sendPasswordResetEmail,signInWithEmailAndPassword,signOut,type User} from "firebase/auth";
+import {doc,getDoc,onSnapshot,serverTimestamp,setDoc} from "firebase/firestore";
 
 type Tab = "today" | "plan" | "log" | "progress";
 type Status = "completed" | "partial" | "skipped";
@@ -21,16 +24,20 @@ const dayKey=()=>["SUN","MON","TUE","WED","THU","FRI","SAT"][new Date().getDay()
 const shortDay=(d:string)=>({MON:"Mon",TUE:"Tue",WED:"Wed",THU:"Thu",FRI:"Fri",WEEKEND:"Weekend"}[d]||d);
 
 export default function Home(){
- const [tab,setTab]=useState<Tab>("today"), [weekNo,setWeekNo]=useState(currentWeek()), [data,setData]=useState<AppData>(EMPTY), [ready,setReady]=useState(false), [selected,setSelected]=useState<{week:PlanWeek;day:string}|null>(null), [logOpen,setLogOpen]=useState(false); const importRef=useRef<HTMLInputElement>(null);
- useEffect(()=>{loadData().then(d=>{setData(d);setReady(true)});const base=location.pathname.startsWith('/Training_app')?'/Training_app/':'/';navigator.serviceWorker?.register(`${base}sw.js`).catch(()=>{});},[]);
- useEffect(()=>{if(ready)saveData(data)},[data,ready]);
- const week=PLAN.weeks[weekNo-1]; const key=dayKey(); const day=week.sessions.find(s=>s.day===key) || (key==="SAT"||key==="SUN"?week.sessions.find(s=>s.day==="WEEKEND"):week.sessions[0]);
- const done=new Map(data.actuals.filter(a=>a.plannedId).map(a=>[a.plannedId,a]));
+ const [tab,setTab]=useState<Tab>("today"), [weekNo,setWeekNo]=useState(currentWeek()), [data,setData]=useState<AppData>(EMPTY), [ready,setReady]=useState(false), [user,setUser]=useState<User|null|undefined>(undefined), [selected,setSelected]=useState<{week:PlanWeek;day:string}|null>(null), [logOpen,setLogOpen]=useState(false); const importRef=useRef<HTMLInputElement>(null),dataRef=useRef(data);
+ useEffect(()=>{dataRef.current=data},[data]);
+ useEffect(()=>{const {auth}=getFirebase();const off=onAuthStateChanged(auth,setUser);const base=location.pathname.startsWith('/Training_app')?'/Training_app/':'/';navigator.serviceWorker?.register(`${base}sw.js`).catch(()=>{});return off},[]);
+ useEffect(()=>{if(!user?.emailVerified){setReady(false);return}const currentUser=user;let off=()=>{};let active=true;(async()=>{const {db}=getFirebase(),ref=doc(db,'users',currentUser.uid,'app','state'),local=await loadData();let chosen=local,hasCloud=false;try{const cloud=await getDoc(ref),cloudData=cloud.data();hasCloud=cloud.exists();if(cloudData?.payload)chosen=cloudData.payload as AppData}catch{}if(!active)return;setData(chosen);dataRef.current=chosen;setReady(true);if(!hasCloud)setDoc(ref,{payload:chosen,updatedAt:serverTimestamp()}).catch(()=>{});off=onSnapshot(ref,s=>{const incoming=s.data()?.payload as AppData|undefined;if(incoming&&JSON.stringify(incoming)!==JSON.stringify(dataRef.current)){dataRef.current=incoming;setData(incoming)}},()=>{})})();return()=>{active=false;off()}},[user]);
+ useEffect(()=>{if(!ready||!user?.emailVerified)return;saveData(data);setDoc(doc(getFirebase().db,'users',user.uid,'app','state'),{payload:data,updatedAt:serverTimestamp()}).catch(()=>{})},[data,ready,user]);
+ if(user===undefined)return <main className="auth-shell"><div className="auth-mark">C</div><p>Loading Crux Cycle…</p></main>;
+ if(!user||!user.emailVerified)return <AuthGate user={user}/>;
+ const week=PLAN.weeks[weekNo-1]!; const key=dayKey(); const day=(week.sessions.find(s=>s.day===key) || (key==="SAT"||key==="SUN"?week.sessions.find(s=>s.day==="WEEKEND"):week.sessions[0]))!;
+ const done=new Map<string,Actual>(data.actuals.filter(a=>a.plannedId).map(a=>[a.plannedId!,a]));
  function add(a:Omit<Actual,"id">){setData(d=>({...d,actuals:[{...a,id:crypto.randomUUID()},...d.actuals]}));setLogOpen(false)}
  function exportJson(){const b=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`crux-cycle-backup-${todayIso()}.json`;a.click();URL.revokeObjectURL(a.href)}
  async function importJson(f?:File){if(!f)return;const x=JSON.parse(await f.text());if(x?.version===1&&Array.isArray(x.actuals))setData(x)}
  return <main className="app-shell">
-  <header className="topbar"><div className="brand"><div className="mark">C</div><div><strong>CRUX CYCLE</strong><span>24-week performance plan</span></div></div><div className="header-actions"><button className="icon-button" onClick={exportJson} aria-label="Export backup">⇩</button><button className="avatar" onClick={()=>importRef.current?.click()} title="Import backup">AC</button><input ref={importRef} hidden type="file" accept="application/json" onChange={e=>importJson(e.target.files?.[0])}/></div></header>
+  <header className="topbar"><div className="brand"><div className="mark">C</div><div><strong>CRUX CYCLE</strong><span>24-week performance plan</span></div></div><div className="header-actions"><button className="icon-button" onClick={exportJson} aria-label="Export backup">⇩</button><button className="avatar" onClick={()=>signOut(getFirebase().auth)} title="Sign out">{(user.email||'AC').slice(0,2).toUpperCase()}</button><input ref={importRef} hidden type="file" accept="application/json" onChange={e=>importJson(e.target.files?.[0])}/></div></header>
   <section className="content">
    {tab==="today"&&<Today week={week} day={day} actual={done.get(`W${String(week.week).padStart(2,"0")}-${day.day}`)} onLog={()=>setLogOpen(true)} onView={()=>setSelected({week,day:day.day})}/>} 
    {tab==="plan"&&<Plan weekNo={weekNo} setWeekNo={setWeekNo} onSelect={(w,d)=>setSelected({week:w,day:d})} done={done}/>} 
@@ -41,6 +48,17 @@ export default function Home(){
   {logOpen&&<LogSheet planned={tab==="today"?{id:`W${String(week.week).padStart(2,"0")}-${day.day}`,title:day.title}:undefined} onClose={()=>setLogOpen(false)} onSave={add}/>} 
   {selected&&<SessionSheet week={selected.week} day={selected.day} onClose={()=>setSelected(null)} onLog={()=>{setSelected(null);setLogOpen(true)}}/>}
  </main>
+}
+
+function AuthGate({user}:{user:User|null}){
+ const [mode,setMode]=useState<'signin'|'register'>('signin'),[email,setEmail]=useState(user?.email||''),[password,setPassword]=useState(''),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[error,setError]=useState('');
+ const url='https://cmamcarval.github.io/Training_app/';
+ const fail=(x:unknown)=>{const code=(x as {code?:string}).code||'';setError(code.includes('invalid-credential')?'Email or password is incorrect.':code.includes('email-already')?'An account already exists for this email.':code.includes('weak-password')?'Use a password of at least 10 characters.':'Could not complete that request. Please try again.')};
+ async function submit(e:FormEvent){e.preventDefault();setBusy(true);setError('');setMessage('');try{const {auth}=getFirebase();if(mode==='register'){const r=await createUserWithEmailAndPassword(auth,email,password);await sendEmailVerification(r.user,{url});setMessage('Verification email sent. Open it, then return here.')}else await signInWithEmailAndPassword(auth,email,password)}catch(x){fail(x)}finally{setBusy(false)}}
+ async function verify(){if(!user)return;setBusy(true);setError('');try{await reload(user);if(user.emailVerified){await getIdToken(user,true);location.reload()}else setMessage('Not verified yet. Open the link in your email first.')}catch(x){fail(x)}finally{setBusy(false)}}
+ async function resend(){if(!user)return;setBusy(true);setError('');try{await sendEmailVerification(user,{url});setMessage('A new verification email was sent.')}catch(x){fail(x)}finally{setBusy(false)}}
+ async function reset(){if(!email){setError('Enter your email first.');return}setBusy(true);setError('');try{await sendPasswordResetEmail(getFirebase().auth,email,{url});setMessage('Password reset email sent.')}catch(x){fail(x)}finally{setBusy(false)}}
+ return <main className="auth-shell"><section className="auth-card"><div className="auth-mark">C</div><div className="eyebrow">PRIVATE TRAINING LOG</div><h1>{user?'Verify your email':mode==='signin'?'Welcome back':'Create your account'}</h1><p>{user?`We sent a verification link to ${user.email}.`:'Your plan works offline and syncs securely across your devices.'}</p>{error&&<div className="auth-error">{error}</div>}{message&&<div className="auth-message">{message}</div>}{user?<><button className="primary" disabled={busy} onClick={verify}>I verified my email</button><button className="text-button" disabled={busy} onClick={resend}>Resend verification email</button><button className="text-button" onClick={()=>signOut(getFirebase().auth)}>Use another email</button></>:<form onSubmit={submit}><label>Email<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required/></label><label>Password<input type="password" value={password} onChange={e=>setPassword(e.target.value)} autoComplete={mode==='signin'?'current-password':'new-password'} minLength={mode==='register'?10:6} required/></label><button className="primary" disabled={busy}>{busy?'Please wait…':mode==='signin'?'Sign in':'Create account'}</button><button type="button" className="text-button" onClick={()=>{setMode(mode==='signin'?'register':'signin');setError('');setMessage('')}}>{mode==='signin'?'Create an account':'I already have an account'}</button>{mode==='signin'&&<button type="button" className="text-button" disabled={busy} onClick={reset}>Forgot password?</button>}</form>}<small>Training data is stored under your Firebase user ID and protected by Firestore rules.</small></section></main>
 }
 
 function Today({week,day,actual,onLog,onView}:{week:PlanWeek;day:PlanWeek['sessions'][number];actual?:Actual;onLog:()=>void;onView:()=>void}){return <>
