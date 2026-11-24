@@ -62,7 +62,10 @@ test("uses per-session Firestore storage and Firebase offline persistence",async
  assert.match(page,/if\(!ready\|\|loadedUid!==user\.uid\)return <Loading/);
  assert.match(page,/editing\?\.date\|\|planned\?\.date\|\|localDateIso/);
  assert.match(page,/Edit logged session/);
+ assert.match(page,/window\.confirm\(`Delete/);
+ assert.match(page,/Delete session/);
  assert.match(store,/'users',uid,'sessions'/);
+ assert.match(store,/deleteDoc\(doc\(sessions\(uid\),id\)\)/);
  assert.match(store,/migrateLegacyPayload/);
  assert.match(firebase,/persistentLocalCache/);
  assert.equal(JSON.parse(manifest).display,"standalone");

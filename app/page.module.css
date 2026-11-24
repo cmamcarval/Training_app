@@ -16,3 +16,19 @@
 .logEntry:hover {
   background: #ffffff80;
 }
+
+.deleteButton {
+  width: 100%;
+  border: 1px solid #b74b43;
+  border-radius: 10px;
+  background: transparent;
+  color: #9d3029;
+  padding: 13px 18px;
+  font-weight: 700;
+  margin-top: 10px;
+}
+
+.deleteButton:hover {
+  background: #9d3029;
+  color: white;
+}

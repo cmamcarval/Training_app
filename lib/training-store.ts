@@ -1,4 +1,4 @@
-import {collection,doc,getDoc,getDocs,onSnapshot,serverTimestamp,setDoc,writeBatch} from 'firebase/firestore';
+import {collection,deleteDoc,doc,getDoc,getDocs,onSnapshot,serverTimestamp,setDoc,writeBatch} from 'firebase/firestore';
 import {getFirebase} from './firebase';
 import {normalizeActual,sortActuals,type Actual} from './training-data';
 
@@ -44,6 +44,10 @@ export function subscribeActuals(uid:string,onData:(actuals:Actual[],meta:SyncMe
 
 export async function saveActual(uid:string,actual:Actual){
  await setDoc(doc(sessions(uid),actual.id),{...serializable(actual),updatedAt:serverTimestamp()});
+}
+
+export async function deleteActual(uid:string,id:string){
+ await deleteDoc(doc(sessions(uid),id));
 }
 
 export function importActuals(uid:string,actuals:Actual[]){

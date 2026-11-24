@@ -6,7 +6,7 @@ import {currentPlanWeek,localDateIso,plannedSessionDate,planPosition} from "../l
 import {getFirebase} from "../lib/firebase";
 import {EFFORT_GUIDE,PLAN,type PlanWeek} from "../lib/plan";
 import {EMPTY_DATA,parseBackup,plannedOutcomeMap,trainingSummary,type Actual,type AppData,type Status} from "../lib/training-data";
-import {importActuals,saveActual,subscribeActuals,type SyncMeta} from "../lib/training-store";
+import {deleteActual,importActuals,saveActual,subscribeActuals,type SyncMeta} from "../lib/training-store";
 import styles from "./page.module.css";
 
 type Tab="today"|"plan"|"log"|"progress";
@@ -83,6 +83,19 @@ export default function Home(){
   }
  }
 
+ async function remove(actual:Actual){
+  setNotice("");
+  try{
+   await deleteActual(uid,actual.id);
+   setLogContext(null);
+   setNotice(`Deleted “${actual.title}”.`);
+  }catch(error){
+   const message=error instanceof Error?error.message:"Could not delete this session.";
+   setNotice(`Delete failed: ${message}`);
+   throw error;
+  }
+ }
+
  function exportJson(){
   const backup={version:2,exportedAt:new Date().toISOString(),actuals:data.actuals};
   const url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:"application/json"}));
@@ -134,6 +147,7 @@ export default function Home(){
   {logContext&&<LogSheet
    planned={logContext.planned} editing={logContext.editing}
    onClose={()=>setLogContext(null)} onSave={add}
+   onDelete={logContext.editing?()=>remove(logContext.editing!):undefined}
   />}
   {selected&&<SessionSheet week={selected.week} day={selected.day} actual={selectedActual} onClose={()=>setSelected(null)} onLog={()=>{const session=selected.week.sessions.find(item=>item.day===selected.day)!;setLogContext({planned:{id:plannedId(selected.week.week,selected.day),title:session.title,date:plannedSessionDate(selected.week.week,selected.day)},editing:selectedActual});setSelected(null)}}/>}
  </main>;
@@ -167,8 +181,8 @@ function Progress({data}:{data:AppData}){const summary=trainingSummary(data.actu
 
 function SessionSheet({week,day,actual,onClose,onLog}:{week:PlanWeek;day:string;actual?:Actual;onClose:()=>void;onLog:()=>void}){const session=week.sessions.find(item=>item.day===day)!;return <div className="overlay" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><article className="sheet" role="dialog" aria-modal="true" aria-label={`${shortDay(day)} training prescription`}><button className="close" onClick={onClose} aria-label="Close">×</button><div className="eyebrow">WEEK {week.week} · {shortDay(day)} · {new Date(plannedSessionDate(week.week,day)+'T12:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</div><h2>{session.title}</h2><p className="lead">{session.intent}</p>{session.blocks.map((block,index)=><section className="detail-block" key={index}><span>{String(index+1).padStart(2,'0')}</span><div><h3>{block.name}</h3><p>{block.detail}</p>{block.meta&&<b>{block.meta}</b>}</div></section>)}<section className="effort-guide"><b>How effort works</b><p>{EFFORT_GUIDE}</p></section><button className="primary" onClick={onLog}>{actual?'Edit logged session':'Log what I did'}</button><button className="text-button" onClick={onClose}>Close</button></article></div>}
 
-function LogSheet({planned,editing,onClose,onSave}:{planned?:PlannedLog;editing?:Actual;onClose:()=>void;onSave:(actual:Omit<Actual,'id'|'loggedAt'>)=>Promise<void>}){
- const [status,setStatus]=useState<Status>(editing?.status||'completed'),[duration,setDuration]=useState(editing?.duration??90),[saving,setSaving]=useState(false),[error,setError]=useState('');
+function LogSheet({planned,editing,onClose,onSave,onDelete}:{planned?:PlannedLog;editing?:Actual;onClose:()=>void;onSave:(actual:Omit<Actual,'id'|'loggedAt'>)=>Promise<void>;onDelete?:()=>Promise<void>}){
+ const [status,setStatus]=useState<Status>(editing?.status||'completed'),[duration,setDuration]=useState(editing?.duration??90),[saving,setSaving]=useState(false),[deleting,setDeleting]=useState(false),[error,setError]=useState('');
  const chooseStatus=(next:Status)=>{setStatus(next);if(next==='skipped')setDuration(0);else if(duration===0)setDuration(90)};
  async function submit(event:FormEvent<HTMLFormElement>){
   event.preventDefault();setSaving(true);setError('');
@@ -180,5 +194,12 @@ function LogSheet({planned,editing,onClose,onSave}:{planned?:PlannedLog;editing?
   };
   try{await onSave(actual)}catch(value){setError(value instanceof Error?value.message:'Could not save this session.')}finally{setSaving(false)}
  }
- return <div className="overlay" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><form className="sheet form" onSubmit={submit} role="dialog" aria-modal="true" aria-label={editing?'Edit training session':'Log training session'}><button type="button" className="close" onClick={onClose} aria-label="Close">×</button><div className="eyebrow">PLAN VS ACTUAL</div><h2>{editing?'Edit session':'Log session'}</h2>{error&&<div className="auth-error">{error}</div>}<label>Session date<input name="date" type="date" defaultValue={editing?.date||planned?.date||localDateIso()} required/></label><label>Session<input name="title" defaultValue={editing?.title||planned?.title||"Unplanned climbing"} required/></label><div className="segmented">{(['completed','partial','skipped'] as Status[]).map(item=><button type="button" className={status===item?'on':''} onClick={()=>chooseStatus(item)} key={item}>{item}</button>)}</div><div className="two"><label>Duration · min<input name="duration" type="number" min="0" value={duration} onChange={event=>setDuration(Math.max(0,Number(event.target.value)))} disabled={status==='skipped'} required/></label><label>Session effort · 1–10<input name="rpe" type="number" min="1" max="10" defaultValue={editing?.rpe??7} disabled={status==='skipped'} required={status!=='skipped'}/></label></div><p className="field-help">4 easy · 6 moderate · 7 hard but repeatable · 8 very hard · 9 near-max · 10 maximal</p><div className="two"><label>Discipline<select name="discipline" defaultValue={editing?.discipline||'boulder'}><option>boulder</option><option>sport</option><option>mixed</option><option>conditioning</option><option>recovery</option><option>other</option></select></label><label>Venue<select name="venue" defaultValue={editing?.venue||'indoor'}><option>indoor</option><option>outdoor</option><option>other</option></select></label></div><div className="two"><label>Tindeq L · kg<input name="left" type="number" min="0" step="0.1" defaultValue={editing?.left}/></label><label>Tindeq R · kg<input name="right" type="number" min="0" step="0.1" defaultValue={editing?.right}/></label></div><label>Notes<textarea name="notes" rows={3} placeholder="Optional symptoms, grades, attempts…" defaultValue={editing?.notes}/></label><button className="primary" type="submit" disabled={saving}>{saving?'Saving…':editing?'Save changes':'Save actual session'}</button></form></div>;
+ async function remove(){
+  if(!editing||!onDelete)return;
+  const date=new Date(`${editing.date}T12:00:00`).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
+  if(!window.confirm(`Delete “${editing.title}” from ${date}? This cannot be undone.`))return;
+  setDeleting(true);setError('');
+  try{await onDelete()}catch(value){setError(value instanceof Error?value.message:'Could not delete this session.')}finally{setDeleting(false)}
+ }
+ return <div className="overlay" onMouseDown={event=>event.target===event.currentTarget&&onClose()}><form className="sheet form" onSubmit={submit} role="dialog" aria-modal="true" aria-label={editing?'Edit training session':'Log training session'}><button type="button" className="close" onClick={onClose} aria-label="Close">×</button><div className="eyebrow">PLAN VS ACTUAL</div><h2>{editing?'Edit session':'Log session'}</h2>{error&&<div className="auth-error">{error}</div>}<label>Session date<input name="date" type="date" defaultValue={editing?.date||planned?.date||localDateIso()} required/></label><label>Session<input name="title" defaultValue={editing?.title||planned?.title||"Unplanned climbing"} required/></label><div className="segmented">{(['completed','partial','skipped'] as Status[]).map(item=><button type="button" className={status===item?'on':''} onClick={()=>chooseStatus(item)} key={item}>{item}</button>)}</div><div className="two"><label>Duration · min<input name="duration" type="number" min="0" value={duration} onChange={event=>setDuration(Math.max(0,Number(event.target.value)))} disabled={status==='skipped'} required/></label><label>Session effort · 1–10<input name="rpe" type="number" min="1" max="10" defaultValue={editing?.rpe??7} disabled={status==='skipped'} required={status!=='skipped'}/></label></div><p className="field-help">4 easy · 6 moderate · 7 hard but repeatable · 8 very hard · 9 near-max · 10 maximal</p><div className="two"><label>Discipline<select name="discipline" defaultValue={editing?.discipline||'boulder'}><option>boulder</option><option>sport</option><option>mixed</option><option>conditioning</option><option>recovery</option><option>other</option></select></label><label>Venue<select name="venue" defaultValue={editing?.venue||'indoor'}><option>indoor</option><option>outdoor</option><option>other</option></select></label></div><div className="two"><label>Tindeq L · kg<input name="left" type="number" min="0" step="0.1" defaultValue={editing?.left}/></label><label>Tindeq R · kg<input name="right" type="number" min="0" step="0.1" defaultValue={editing?.right}/></label></div><label>Notes<textarea name="notes" rows={3} placeholder="Optional symptoms, grades, attempts…" defaultValue={editing?.notes}/></label><button className="primary" type="submit" disabled={saving||deleting}>{saving?'Saving…':editing?'Save changes':'Save actual session'}</button>{editing&&<button className={styles.deleteButton} type="button" disabled={saving||deleting} onClick={()=>void remove()}>{deleting?'Deleting…':'Delete session'}</button>}</form></div>;
 }
