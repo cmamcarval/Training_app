@@ -6,7 +6,11 @@ export const EMPTY_DATA:AppData={version:2,actuals:[]};
 const statuses=new Set<Status>(['completed','partial','skipped']);
 const finite=(value:unknown)=>typeof value==='number'&&Number.isFinite(value);
 const optionalNumber=(value:unknown)=>finite(value)&&(value as number)>=0?value as number:undefined;
-const validDate=(value:unknown)=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&!Number.isNaN(Date.parse(`${value}T00:00:00Z`));
+const validDate=(value:unknown)=>{
+ if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+ const parsed=Date.parse(`${value}T00:00:00Z`);
+ return !Number.isNaN(parsed)&&new Date(parsed).toISOString().slice(0,10)===value;
+};
 
 export function normalizeActual(value:unknown,fallbackId='',legacyOrder=0):Actual|null{
  if(!value||typeof value!=='object')return null;
@@ -50,7 +54,8 @@ export function parseBackup(value:unknown):Actual[]{
 
 export function plannedOutcomeMap(actuals:Actual[]){
  const map=new Map<string,Actual>();
- for(const actual of sortActuals(actuals))if(actual.plannedId&&!map.has(actual.plannedId))map.set(actual.plannedId,actual);
+ const newestFirst=[...actuals].sort((a,b)=>b.loggedAt.localeCompare(a.loggedAt)||b.id.localeCompare(a.id));
+ for(const actual of newestFirst)if(actual.plannedId&&!map.has(actual.plannedId))map.set(actual.plannedId,actual);
  return map;
 }
 

@@ -1,0 +1,18 @@
+.logEntry {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 48px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.logEntry:hover {
+  background: #ffffff80;
+}

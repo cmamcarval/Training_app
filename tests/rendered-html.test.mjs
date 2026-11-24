@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
-import {currentPlanWeek,localDateIso} from "../lib/dates.ts";
+import {currentPlanWeek,localDateIso,plannedSessionDate,planPosition} from "../lib/dates.ts";
 import {PLAN} from "../lib/plan.ts";
 import {normalizeActual,parseBackup,plannedOutcomeMap,trainingSummary} from "../lib/training-data.ts";
 
@@ -26,11 +26,17 @@ test("calculates plan weeks and input dates without DST drift",()=>{
  const afterLisbonDst=new Date(2027,2,29,0,0,0);
  assert.equal(currentPlanWeek(afterLisbonDst),18);
  assert.equal(localDateIso(afterLisbonDst),"2027-03-29");
+ assert.deepEqual(planPosition(new Date(2026,10,29,12)),{phase:"before",week:1});
+ assert.deepEqual(planPosition(new Date(2026,10,30,12)),{phase:"active",week:1});
+ assert.deepEqual(planPosition(new Date(2027,4,16,12)),{phase:"active",week:24});
+ assert.deepEqual(planPosition(new Date(2027,4,17,12)),{phase:"after",week:24});
+ assert.equal(plannedSessionDate(1,"TUE"),"2026-12-01");
+ assert.equal(plannedSessionDate(24,"WEEKEND"),"2027-05-15");
 });
 
 test("normalizes skipped sessions and selects the newest planned outcome",()=>{
  const base={plannedId:"W01-TUE",date:"2026-12-01",title:"Finger strength",duration:90,rpe:7,discipline:"boulder",venue:"indoor",notes:""};
- const old=normalizeActual({...base,id:"old",status:"completed",loggedAt:"2026-12-01T10:00:00Z"});
+ const old=normalizeActual({...base,id:"old",date:"2026-12-02",status:"completed",loggedAt:"2026-12-01T10:00:00Z"});
  const newest=normalizeActual({...base,id:"new",status:"skipped",loggedAt:"2026-12-01T11:00:00Z"});
  assert.ok(old&&newest);
  assert.equal(newest.duration,0);
@@ -41,6 +47,7 @@ test("normalizes skipped sessions and selects the newest planned outcome",()=>{
 
 test("validates backup contents before import",()=>{
  assert.throws(()=>parseBackup({version:2,actuals:[{id:"broken"}]}),/invalid training entry/);
+ assert.equal(normalizeActual({id:"impossible",date:"2027-02-31",title:"Impossible date",status:"completed",duration:60,rpe:7,discipline:"boulder",venue:"indoor",notes:""}),null);
  assert.throws(()=>parseBackup({version:99,actuals:[]}),/Unsupported/);
 });
 
@@ -53,6 +60,8 @@ test("uses per-session Firestore storage and Firebase offline persistence",async
  ]);
  assert.doesNotMatch(page,/indexedDB\.open|app-data/);
  assert.match(page,/if\(!ready\|\|loadedUid!==user\.uid\)return <Loading/);
+ assert.match(page,/editing\?\.date\|\|planned\?\.date\|\|localDateIso/);
+ assert.match(page,/Edit logged session/);
  assert.match(store,/'users',uid,'sessions'/);
  assert.match(store,/migrateLegacyPayload/);
  assert.match(firebase,/persistentLocalCache/);
