@@ -14,6 +14,8 @@ test("builds the Crux Cycle GitHub Pages shell",async()=>{
 
 test("renders all 24 plan weeks without private coaching codes or orphan blocks",()=>{
  assert.equal(PLAN.weeks.length,24);
+ assert.equal(PLAN.weeks[0].dates,"23–29 Nov 2026");
+ assert.equal(PLAN.weeks[23].dates,"03–09 May 2027");
  const rendered=JSON.stringify(PLAN);
  for(const code of ["F0","F1","F2","C1","C2","RPE"])assert.doesNotMatch(rendered,new RegExp(code));
  const blocks=PLAN.weeks.flatMap(week=>week.sessions.flatMap(session=>session.blocks));
@@ -24,20 +26,21 @@ test("renders all 24 plan weeks without private coaching codes or orphan blocks"
 
 test("calculates plan weeks and input dates without DST drift",()=>{
  const afterLisbonDst=new Date(2027,2,29,0,0,0);
- assert.equal(currentPlanWeek(afterLisbonDst),18);
+ assert.equal(currentPlanWeek(afterLisbonDst),19);
  assert.equal(localDateIso(afterLisbonDst),"2027-03-29");
- assert.deepEqual(planPosition(new Date(2026,10,29,12)),{phase:"before",week:1});
- assert.deepEqual(planPosition(new Date(2026,10,30,12)),{phase:"active",week:1});
- assert.deepEqual(planPosition(new Date(2027,4,16,12)),{phase:"active",week:24});
- assert.deepEqual(planPosition(new Date(2027,4,17,12)),{phase:"after",week:24});
- assert.equal(plannedSessionDate(1,"TUE"),"2026-12-01");
- assert.equal(plannedSessionDate(24,"WEEKEND"),"2027-05-15");
+ assert.deepEqual(planPosition(new Date(2026,10,22,12)),{phase:"before",week:1});
+ assert.deepEqual(planPosition(new Date(2026,10,23,12)),{phase:"active",week:1});
+ assert.deepEqual(planPosition(new Date(2027,4,9,12)),{phase:"active",week:24});
+ assert.deepEqual(planPosition(new Date(2027,4,10,12)),{phase:"after",week:24});
+ assert.equal(plannedSessionDate(1,"MON"),"2026-11-23");
+ assert.equal(plannedSessionDate(1,"TUE"),"2026-11-24");
+ assert.equal(plannedSessionDate(24,"WEEKEND"),"2027-05-08");
 });
 
 test("normalizes skipped sessions and selects the newest planned outcome",()=>{
- const base={plannedId:"W01-TUE",date:"2026-12-01",title:"Finger strength",duration:90,rpe:7,discipline:"boulder",venue:"indoor",notes:""};
- const old=normalizeActual({...base,id:"old",date:"2026-12-02",status:"completed",loggedAt:"2026-12-01T10:00:00Z"});
- const newest=normalizeActual({...base,id:"new",status:"skipped",loggedAt:"2026-12-01T11:00:00Z"});
+ const base={plannedId:"W01-TUE",date:"2026-11-24",title:"Finger strength",duration:90,rpe:7,discipline:"boulder",venue:"indoor",notes:""};
+ const old=normalizeActual({...base,id:"old",date:"2026-11-25",status:"completed",loggedAt:"2026-11-24T10:00:00Z"});
+ const newest=normalizeActual({...base,id:"new",status:"skipped",loggedAt:"2026-11-24T11:00:00Z"});
  assert.ok(old&&newest);
  assert.equal(newest.duration,0);
  assert.equal(newest.rpe,undefined);
