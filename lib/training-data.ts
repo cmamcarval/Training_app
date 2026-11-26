@@ -1,11 +1,12 @@
 export type Status='completed'|'partial'|'skipped';
-export type Actual={id:string;plannedId?:string;date:string;title:string;status:Status;duration:number;rpe?:number;discipline:string;venue:string;notes:string;left?:number;right?:number;loggedAt:string};
+export type Actual={id:string;plannedId?:string;date:string;title:string;status:Status;duration:number;rpe?:number;discipline:string;venue:string;notes:string;left?:number;right?:number;fingerSets?:number;fingerRpe?:number;hardAttempts?:number;fatigue?:number;sleep?:number;loggedAt:string};
 export type AppData={version:2;actuals:Actual[]};
 export const EMPTY_DATA:AppData={version:2,actuals:[]};
 
 const statuses=new Set<Status>(['completed','partial','skipped']);
 const finite=(value:unknown)=>typeof value==='number'&&Number.isFinite(value);
 const optionalNumber=(value:unknown)=>finite(value)&&(value as number)>=0?value as number:undefined;
+const optionalRange=(value:unknown,min:number,max:number)=>finite(value)&&(value as number)>=min&&(value as number)<=max?value as number:undefined;
 const validDate=(value:unknown)=>{
  if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
  const parsed=Date.parse(`${value}T00:00:00Z`);
@@ -35,6 +36,11 @@ export function normalizeActual(value:unknown,fallbackId='',legacyOrder=0):Actua
   notes:typeof row.notes==='string'?row.notes.slice(0,10_000):'',
   ...(optionalNumber(row.left)===undefined?{}:{left:optionalNumber(row.left)}),
   ...(optionalNumber(row.right)===undefined?{}:{right:optionalNumber(row.right)}),
+  ...(optionalNumber(row.fingerSets)===undefined?{}:{fingerSets:optionalNumber(row.fingerSets)}),
+  ...(optionalRange(row.fingerRpe,1,10)===undefined?{}:{fingerRpe:optionalRange(row.fingerRpe,1,10)}),
+  ...(optionalNumber(row.hardAttempts)===undefined?{}:{hardAttempts:optionalNumber(row.hardAttempts)}),
+  ...(optionalRange(row.fatigue,1,5)===undefined?{}:{fatigue:optionalRange(row.fatigue,1,5)}),
+  ...(optionalRange(row.sleep,0,24)===undefined?{}:{sleep:optionalRange(row.sleep,0,24)}),
   loggedAt
  };
 }

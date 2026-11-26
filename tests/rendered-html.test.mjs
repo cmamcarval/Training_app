@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
 import test from "node:test";
 import {currentPlanWeek,localDateIso,plannedSessionDate,planPosition} from "../lib/dates.ts";
-import {PLAN} from "../lib/plan.ts";
+import {PLAN,SUPPLEMENTAL_GUIDES} from "../lib/plan.ts";
 import {normalizeActual,parseBackup,plannedOutcomeMap,trainingSummary} from "../lib/training-data.ts";
 
 test("builds the Crux Cycle GitHub Pages shell",async()=>{
@@ -22,6 +22,10 @@ test("renders all 24 plan weeks without private coaching codes or orphan blocks"
  assert.equal(blocks.filter(block=>block.name==="Training block").length,0);
  assert.ok(blocks.some(block=>block.name.includes("20 mm half-crimp")));
  assert.ok(blocks.some(block=>block.name.includes("General strength circuit")));
+ assert.ok(blocks.some(block=>block.name==="Easy technical bouldering"));
+ assert.ok(blocks.some(block=>block.name==="Easy aerobic climbing"));
+ assert.ok(blocks.some(block=>block.name.startsWith("Mobility choice")));
+ assert.ok(SUPPLEMENTAL_GUIDES.some(block=>block.name.startsWith("Trunk control")));
 });
 
 test("calculates plan weeks and input dates without DST drift",()=>{
@@ -52,6 +56,12 @@ test("validates backup contents before import",()=>{
  assert.throws(()=>parseBackup({version:2,actuals:[{id:"broken"}]}),/invalid training entry/);
  assert.equal(normalizeActual({id:"impossible",date:"2027-02-31",title:"Impossible date",status:"completed",duration:60,rpe:7,discipline:"boulder",venue:"indoor",notes:""}),null);
  assert.throws(()=>parseBackup({version:99,actuals:[]}),/Unsupported/);
+});
+
+test("preserves the revised optional training detail fields",()=>{
+ const actual=normalizeActual({id:"details",date:"2026-11-24",title:"Finger strength",status:"completed",duration:100,rpe:7,discipline:"boulder",venue:"indoor",notes:"Normal arm response",left:58,right:64.5,fingerSets:3,fingerRpe:6,hardAttempts:4,fatigue:2,sleep:8,loggedAt:"2026-11-24T20:00:00Z"});
+ assert.ok(actual);
+ assert.deepEqual({fingerSets:actual.fingerSets,fingerRpe:actual.fingerRpe,hardAttempts:actual.hardAttempts,fatigue:actual.fatigue,sleep:actual.sleep},{fingerSets:3,fingerRpe:6,hardAttempts:4,fatigue:2,sleep:8});
 });
 
 test("uses per-session Firestore storage and Firebase offline persistence",async()=>{

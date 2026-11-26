@@ -1,7 +1,7 @@
 import {planWeekDateRange} from './dates.ts';
 
 export type Block={name:string;detail:string;meta?:string}; export type Session={day:string;title:string;intent:string;minutes:string;optional?:boolean;blocks:Block[]}; export type PlanWeek={week:number;dates:string;meso:string;label:string;deload:boolean;note:string;sessions:Session[]};
-export const EFFORT_GUIDE='Effort scale: 4/10 is very easy; 6/10 is moderate with about four clean efforts left; 7/10 is hard but repeatable; 8/10 is very hard with about two clean efforts left; 9/10 is near-max with one clean effort left; 10/10 is maximal and is not prescribed here.';
+export const EFFORT_GUIDE='Session effort is subjective, not a force percentage: 1–2 very easy; 3–4 easy; 5–6 moderate; 7 hard but controlled; 8 very hard; 9 near maximum; 10 maximal. Record one overall value after training. Fingerboard-set effort may be logged separately.';
 const fingerWarmup:Block={name:'Warm-up · 25–35 min',detail:'10–15 min general movement, then 15–20 min progressive easy climbing. Add 2–3 easy 7-second pulls per hand on the 20 mm edge, increasing gradually without fatigue.'};
 const climbingWarmup:Block={name:'Warm-up · 25–35 min',detail:'10–15 min general movement, then 15–20 min progressive easy climbing. Finish with 3–5 familiar boulders that gradually approach the style and intensity of today’s main block.'};
 const effortText=(target:string)=>({
@@ -21,8 +21,6 @@ const plain=(text:string)=>text
  .replace(/\bsublimit\b/gi,'below-limit')
  .replace(/~70–80%(?: limit)?/g,'about 70–80% of your limit')
  .replace(/technique\/varied climbing/g,'varied, technique-focused climbing')
- .replace(/\+ mobility/g,', then 8–12 min easy shoulder, forearm and hip mobility')
- .replace(/\+ shoulders/g,', then 2 × 12–15 band external rotations and 2 × 8–12 controlled scapular pull-ups')
  .replace(/with realistic timing/g,'using 4 min per boulder and 15–20 min between the two sets')
  .replace(/full rests/g,'3–5 min rests')
  .replace(/^then\s+/i,'');
@@ -32,18 +30,35 @@ function fingerBlock(prescription:string,guardrail:string):Block{
  if(!match)return{name:'Finger loading',detail:plain(prescription),meta:plain(guardrail)};
  const [,code,sets,rawEffort]=match,defaults=protocolDefaults[code],target=(rawEffort||defaults.effort).replace('-','–');
  const sessionRule=guardrail==='Fingerboard first; full rests.'?'Complete every finger pull before starting the climbing block.':plain(guardrail);
- return{name:`20 mm half-crimp · ${sets} × 7 sec per hand`,detail:`Use your standardized Tindeq setup and the same shoulder, elbow and wrist position as your baseline. Pull one hand at a time. Choose resistance separately for each hand so the final pull feels like ${effortText(target)}. Rest ${defaults.rest} before that same hand pulls again; alternate hands during the rest if convenient.`,meta:`Record left and right kg separately. ${sessionRule} Stop for sharp pain, a changing grip, or loss of arm position.`};
+ return{name:`20 mm half-crimp · ${sets} × 7 sec per hand`,detail:`Use your standardized Tindeq setup and the same shoulder, elbow and wrist position every time. Pull one hand at a time without jerking. Choose resistance separately for each hand so the final pull feels like ${effortText(target)}. Rest ${defaults.rest} before that same hand pulls again; alternating hands is fine.`,meta:`Record sets, finger effort, and left/right kg. ${sessionRule} Only consider a 1–2 kg (about 2–3%) increase at the next comparable exposure when every hold is clean and the following 24 hours are normal. If you miss 7 seconds, lose position, or exceed target effort, repeat or reduce 5–10%. Stop for sharp pain, a changing grip, or falling output.`};
 }
+const mobilityBlock:Block={name:'Mobility choice · 6–9 min',detail:'Choose the sequence that is most useful today. Shoulder/thoracic: open book 6–8/side, quadruped thoracic rotation 6/side, wall slides 1–2 × 8, doorway pec stretch 20–30 sec/side. Hip/ankle: 90/90 switches 8 total, half-kneeling hip-flexor stretch 30 sec/side, supported deep squat 2 × 20–30 sec, knee-to-wall rocks 10/side.',meta:'Use relaxed, controlled ranges. Do not force a symptomatic area. On Thursday choose one sequence; on Monday both are optional.'};
+const shoulderBlock:Block={name:'Shoulder accessory · 2 × 12–15',detail:'Choose either band/cable external rotation or a light face pull. Keep the load low and the movement controlled; use this instead of another shoulder accessory, not in addition to it.',meta:'Stop for pinching or aggravation of the arm.'};
+export const SUPPLEMENTAL_GUIDES:Block[]=[
+ {name:'Trunk control reference · 10–15 min',detail:'Only when a separate core block is prescribed: dead bug 2 × 8/side; side plank 2 × 25–40 sec/side; Pallof press 2 × 8–10/side with a 2 sec hold. Omit an exercise already covered by the day’s strength circuit.',meta:'Use in general preparation and strength accumulation. Progress the lever or controlled load, not maximal bracing.'},
+ {name:'Climbing body-tension reference · 10–18 min',detail:'Choose two: hollow-body hold 2 × 20–35 sec; hanging knee-to-chest or leg raise 2 × 6–10 if the arm tolerates hanging; front-lever tuck or feet-supported lever 2 × 8–12 sec. Then add Pallof press 1–2 × 8/side or side plank 1–2 × 25 sec.',meta:'Submaximal only. Use during later strength, power, and conversion phases when separately prescribed; stop if it harms next-day climbing.'},
+ {name:'Accessory rule',detail:'Direct arm work is optional and replaces existing accessory volume—it never stacks on top. During phases 1–3 only, a symptom-free option is hammer/neutral cable curl 1–2 × 8–12 at effort 5–6/10 or pressdown 1–2 × 10–15 at effort 6–7/10.',meta:'This is general conditioning, not biceps rehabilitation. Persistent or increasing focal arm pain needs qualified assessment.'},
+ {name:'Adjustment rules',detail:'After one hard outdoor day, keep the plan only if warm-up and finger force are normal. After two hard days, keep Monday easy and reduce Tuesday finger load 25–40% or shift it 24–48 hours. If Wednesday becomes unusually hard, lighten or omit Thursday fingers. If tired Friday or no demanding weekend is planned, skip activation rather than substituting a hard workout.',meta:'Log the reason; do not rewrite the macrocycle or cram missed work.'}
+];
 function activityBlock(text:string,index=0):Block{
  const value=plain(text.trim().replace(/\.$/,''))+'.',lower=value.toLowerCase();
- const name=lower.includes('weighted pull')?'Weighted pull-ups':lower.startsWith('push ')?'Push strength':lower.includes('landing')?'Landing control':lower.includes('record zones')?'What to record':lower.includes('route interval')?'Route intervals':lower.includes('aerobic')?'Easy aerobic climbing':lower.includes('mobility')?'Mobility':lower.includes('limit problem')?'Limit bouldering':lower.includes('coordination')||lower.includes('dynamic')?'Coordination and dynamic bouldering':lower.includes('benchmark')?'Six-boulder benchmark':lower.includes('unfamiliar boulder')?'Competition-style bouldering round':lower.includes('competition-style')||lower.includes('hard problems')?'Competition-style bouldering':index===0?'Climbing':'Training block';
- let detail=lower.includes('easy aerobic')?`${value} Keep the forearm pump low and the pace conversational; reduce the grade before you need to shake out.`:value;
+ const isVaried=lower.includes('varied'),isTechnique=!isVaried&&(lower.includes('technical')||lower.includes('easy technique'));
+ const name=lower.includes('weighted pull')?'Weighted pull-ups':lower.startsWith('push ')?'Push strength':lower.includes('landing')?'Landing control':lower.includes('record zones')?'What to record':lower.includes('route interval')?'Route intervals':lower.includes('below-limit')?'Repeated submaximal boulders':lower.includes('aerobic')?'Easy aerobic climbing':lower==='mobility.'?'Mobility choice':lower.includes('limit problem')?'Limit bouldering':lower.includes('coordination')||lower.includes('dynamic')?'Coordination and dynamic bouldering':lower.includes('benchmark')?'Six-boulder benchmark':lower.includes('unfamiliar boulder')?'Competition-style bouldering round':lower.includes('competition-style')||lower.includes('hard problems')?'Competition-style bouldering':isTechnique?'Easy technical bouldering':isVaried?'Varied submaximal climbing':lower.includes('moderate bouldering')?'Moderate bouldering':index===0?'Climbing':'Accessory work';
+ let detail=value;
+ if(lower.includes('easy aerobic'))detail+=' Use easy traversing, routes, or laps on large holds. Keep effort at 3–4/10 and pump at 0–2/10; lower the grade or angle if pump accumulates. This is sustained easy movement, not technique practice or power endurance.';
+ if(isTechnique)detail+=' Choose 3–4 problems about 2–3 local levels below your limit. Spend roughly 5 min selecting/rehearsing, 8 min on silent feet, 7 min on hip rotation or flagging, and 5 min on smooth economical repeats. Rest whenever accuracy falls; no meaningful pump or limit attempts.';
+ if(isVaried)detail+=' Rotate slab, vertical, steep, compression, coordination, and footwork styles every 10–15 min. Rest 1–3 min between problems. The goal is broad movement exposure, not maximum attempts.';
  if(lower.includes('weighted pull')&&!lower.includes('effort'))detail+=' Choose a load that leaves 1–2 clean repetitions possible at the end of every set.';
  if(lower.startsWith('push ')&&!lower.includes('effort'))detail+=' Choose a variation or load that leaves 2–3 clean repetitions possible at the end of every set.';
- if(lower.includes('moderate bouldering'))detail+=' Choose problems you can normally complete within 1–3 attempts; stop before fatigue changes your movement.';
+ if(lower.includes('moderate bouldering'))detail+=' Choose problems you can normally complete within 1–3 controlled attempts. Rotate styles, rest 2–3 min as needed, and avoid repeated failures or prolonged projecting.';
  if(lower.includes('limit problem')||lower.includes('coordination')||lower.includes('unfamiliar boulder')||lower.includes('competition-style'))detail+=' End the block if movement speed, accuracy, or landing control clearly drops.';
+ if(lower.includes('limit problem'))detail+=' Use the prescribed problems and attempts only. Record successful hard moves and any clear power decline; do not add retries.';
+ if(lower.includes('coordination')||lower.includes('dynamic'))detail+=' Practise the landing pattern at low intensity first and do not increase fall height.';
+ if(lower.includes('below-limit'))detail+=' Use problems you can reliably complete when fresh, about 70–80% of limit. Record completions and any performance drop.';
+ if(lower.includes('route interval'))detail+=' Use top-rope, autobelay, or other safe terrain that permits continuous quality movement. Moderate pump around 3–5/10 is acceptable; avoid failure or risky clipping while fatigued.';
+ if(lower.includes('unfamiliar boulder')||lower.includes('benchmark'))detail+=' Count attempts, zones and tops, and note early-versus-late round quality using a consistent format.';
  if(lower.includes('landing-control'))detail='Spend 5–10 min practising quiet, balanced landings from comfortable heights. Increase height only while control stays consistent.';
- if(lower==='mobility.')detail='Spend 8–12 min on easy shoulder, forearm, wrist and hip mobility. Use comfortable ranges; do not force painful positions.';
+ if(lower==='mobility.')return mobilityBlock;
  return{name,detail};
 }
 function appendQualifier(blocks:Block[],part:string){
@@ -64,20 +79,25 @@ function fingerSession(text:string,guardrail:string):Block[]{
  if(/^No fingerboard/i.test(first))return[{name:'Taper recovery',detail:'Do not do finger loading today. Either rest completely or do 20–40 min of very easy movement that leaves you feeling fresher.'}];
  if(!/^F[012]/.test(first))return[first,...parts].map(activityBlock);
  const activities:Block[]=[];
- for(const part of parts)if(!appendQualifier(activities,part))activities.push(activityBlock(part,activities.length));
+ for(const part of parts){
+  const addMobility=/\+\s*mobility/i.test(part),addShoulders=/\+\s*shoulders/i.test(part),main=part.replace(/\+\s*(mobility|shoulders)/ig,'').trim();
+  if(main&&!appendQualifier(activities,main))activities.push(activityBlock(main,activities.length));
+  if(addMobility)activities.push(mobilityBlock);
+  if(addShoulders)activities.push(shoulderBlock);
+ }
  return[fingerWarmup,fingerBlock(first,guardrail),...activities];
 }
 function developmentBlocks(text:string):Block[]{
  const parts=text.split(';').map(x=>x.trim()).filter(Boolean),blocks:Block[]=[];
  for(const part of parts){
   if(appendQualifier(blocks,part))continue;
-  const c1=part.match(/^C1\s+(\d+) rounds?/i); if(c1){blocks.push({name:`General strength circuit · ${c1[1]} rounds`,detail:'Each round: split squat 8–10 per side; push-ups 8–12; row 10–12; Romanian deadlift 8–10; Pallof press 10 per side; band external rotation 12–15. Rest 30–60 sec between exercises and 2 min between rounds.',meta:'Finish every set with 2–4 clean repetitions still possible.'});continue}
-  if(/^C2/i.test(part)){blocks.push({name:'Strength maintenance · 2 rounds',detail:'Only if fresh: push 8–10; row 8–10; single-leg squat 8 per side; Pallof press or other anti-rotation exercise 10 per side. Rest as needed and finish in 15–25 min.',meta:'Effort 6–7/10. Skip this block if climbing quality or recovery is down.'});continue}
+  const c1=part.match(/^C1\s+(\d+) rounds?/i); if(c1){blocks.push({name:`General strength circuit · ${c1[1]} rounds`,detail:'Each round: split squat or reverse lunge 8–10/side with a 2 sec descent; push-up or dumbbell bench 8–12; chest-supported row 10–12; Romanian deadlift 8–10; Pallof press 10/side with a 2 sec pause; band/cable external rotation 12–15/side. Take 30–60 sec between exercises and 2 min between rounds.',meta:'Effort 6–7/10. Keep 2–4 clean repetitions in reserve. Improve control before adding the smallest practical load.'});continue}
+  if(/^C2/i.test(part)){blocks.push({name:'Strength maintenance · 2 sets each',detail:'Push-up, dumbbell bench, or comfortable overhead press 2 × 8–10; chest-supported or cable row 2 × 8–10; split squat or step-up 2 × 8/side; Pallof press 2 × 10/side or side plank 2 × 25–35 sec/side. Rest 60–90 sec and finish in 15–25 min.',meta:'Effort 6–7/10 with 2–3 clean repetitions in reserve. Do this only where listed; during deload/taper reduce to one round or omit if climbing quality is the priority.'});continue}
   blocks.push(activityBlock(part,blocks.length));
  }
  return[climbingWarmup,...blocks];
 }
-const m=(detail:string):Session=>({day:'MON',title:'Recovery & movement',intent:'Recover, move well, and arrive fresh for Tuesday.',minutes:'20–60',optional:true,blocks:[{name:'Recovery, mobility or easy climbing',detail:plain(detail)},{name:'Readiness check',detail:'This should feel restorative. If it becomes a hard climbing day, stop calling it recovery and reduce Tuesday finger loading by 25–40% or move it 24–48 hours.'}]});
+const m=(detail:string):Session=>({day:'MON',title:'Recovery & movement',intent:'Recover, move well, and arrive fresh for Tuesday.',minutes:'20–60',optional:true,blocks:[{name:'Recovery, mobility or easy climbing',detail:plain(detail)},mobilityBlock,{name:'Readiness check',detail:'This should feel restorative. If it becomes a hard climbing day, treat it as hard training: make Tuesday easy/short or move the heavy fingerboard 24–48 hours. After two hard weekend days, reduce Tuesday finger load 25–40% or shift it; never cram missed work.'}]});
 const f=(deload=false):Session=>({day:'FRI',title:'Recruitment activation',intent:'Finish sharper than you arrived. No fatigue chase.',minutes:deload?'15–25':'20–40',optional:true,blocks:[{name:'Progressive warm-up · 10–15 min',detail:'Move generally, then climb 3–5 familiar easy-to-moderate boulders, increasing intensity gradually.'},{name:'Crisp recruitment · 2–3 efforts',detail:'Choose a familiar powerful move or very short boulder at about 80–90% of maximum. Do one crisp attempt, rest 3–5 min, and repeat for 2–3 total efforts. Stop immediately if speed or coordination drops.',meta:deload?'Deload: use very light activation or take the day off.':'You should leave feeling fresher, not trained.'}]});
 const we:Session={day:'WEEKEND',title:'Flexible weekend',intent:'Outdoor sport, outdoor boulder, indoor, mixed, or rest.',minutes:'—',optional:true,blocks:[{name:'Athlete choice',detail:'No workout is required. Climb or rest according to opportunity and recovery. Log the discipline, duration, session effort from 1–10, and number of genuinely hard attempts.'}]};
 const s=(day:string,title:string,intent:string,minutes:string,blocks:Block[]):Session=>({day,title,intent,minutes,blocks});
